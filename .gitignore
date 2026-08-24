@@ -1,0 +1,16 @@
+# Artifacts
+/bin/
+/dist/
+
+# Go
+*.test
+coverage.out
+coverage.html
+
+# Environment
+.env
+.env.local
+
+# Frontend
+web/node_modules/
+web/dist/
