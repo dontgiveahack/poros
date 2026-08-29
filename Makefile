@@ -1,6 +1,6 @@
 BINARY := bin/poros
 
-.PHONY: build test fmt vet run clean
+.PHONY: build test fmt vet lint run clean
 
 build:
 	go build -o $(BINARY) ./cmd/poros
@@ -13,6 +13,9 @@ fmt:
 
 vet:
 	go vet ./...
+
+lint:
+	golangci-lint run ./...
 
 run: build
 	./$(BINARY)

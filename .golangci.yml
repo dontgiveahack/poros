@@ -1,0 +1,20 @@
+version: "2"
+
+run:
+  timeout: 5m
+
+linters:
+  enable:
+    - errcheck    # Non checked errors
+    - govet       # Stdlib usage errors
+    - ineffassign # Ineffective assignations
+    - staticcheck # Classical Go linter
+    - unused      # Unused types/symbols
+    - misspell    # Typos in Comments/Ids
+    - revive      # Go style
+  exclusions:
+    generated: lax
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
