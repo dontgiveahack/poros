@@ -3,6 +3,7 @@
 package domain
 
 import (
+	"encoding/json"
 	"fmt"
 	"math/big"
 	"strings"
@@ -110,4 +111,40 @@ func (a Amount) String() string {
 func trimDecimal(s string) string {
 	s = strings.TrimRight(s, "0")
 	return strings.TrimSuffix(s, ".")
+}
+
+// MarshalJSON renders ("value":"54.32","commodity":"EUR").
+func (a Amount) MarshalJSON() ([]byte, error) {
+	v := a.value
+	if v == nil {
+		v = new(big.Rat)
+	}
+
+	return json.Marshal(struct {
+		Value     string    `json:"value"`
+		Commodity Commodity `json:"commodity"`
+	}{
+		Value: trimDecimal(v.FloatString(8)),
+		Commodity: a.commodity,
+	})
+}
+
+// UnmarshalJSON parses ("value":"54.32","commodity":"EUR").
+func (a *Amount) UnmarshalJSON(b []byte) error {
+	var raw struct {
+		Value     string    `json:"value"`
+		Commodity Commodity `json:"commodity"`
+	}
+
+	if err := json.Unmarshal(b, &raw); err != nil {
+		return err
+	}
+
+	parsed, err := ParseAmount(raw.Value + " " + string(raw.Commodity))
+	if err != nil {
+		return err
+	}
+
+	*a = parsed
+	return nil
 }
