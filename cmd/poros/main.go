@@ -6,6 +6,7 @@ import (
 	"os"
 	"sort"
 
+	"github.com/dontgiveahack/poros/internal/config"
 	"github.com/dontgiveahack/poros/internal/domain"
 	"github.com/dontgiveahack/poros/internal/store"
 )
@@ -17,6 +18,7 @@ Usage:
 
 Commands:
   version    Print the poros version
+  init       Initialise a new poros project
   balance    Show balances per account
   help       Show this help
 
@@ -35,6 +37,8 @@ func main() {
 		fmt.Println("poros v0.0.1")
 	case "balance":
 		code = runBalance(os.Args[2:])
+	case "init":
+		code = runInit(os.Args[2:])
 	case "help", "-h", "--help":
 		fmt.Print(usage)
 	default:
@@ -88,6 +92,40 @@ func runBalance(args []string) int {
 			fmt.Printf("%-24s %12s\n", account, amount.String())
 		}
 	}
+
+	return 0
+}
+
+func runInit(args []string) int {
+	fs := flag.NewFlagSet("init", flag.ContinueOnError)
+	dir := fs.String("dir", ".", "project directory to initialise")
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+
+	tomlPath := fmt.Sprintf("%s/poros.toml", *dir)
+	dataDir := fmt.Sprintf("%s/data", *dir)
+
+	if err := os.MkdirAll(dataDir, 0o755); err != nil {
+		fmt.Fprintf(os.Stderr, "mkdir %s: %v\n", dataDir, err)
+		return 1
+	}
+
+	cfg := config.Default()
+	if err := config.Write(tomlPath, cfg); err != nil {
+		// data dir already created, so no fatal for re-run
+		fmt.Fprintf(os.Stderr, "%v\n", err)
+	}
+
+	// Ensure empty JSON arrays exist so LoadDir sees valid files.
+	for _, name := range[]string{"accounts.json", "transactions.json", "assets.json", "goals.json"} {
+		p := fmt.Sprintf("%s/%s", dataDir, name)
+		if _, err := os.Stat(p); os.IsNotExist(err) {
+			os.WriteFile(p, []byte("[]\n"), 0o644)
+		}
+	}
+
+	fmt.Printf("initialised %s and %s\n", tomlPath, dataDir)
 
 	return 0
 }
