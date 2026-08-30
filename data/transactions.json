@@ -1,0 +1,6 @@
+[
+  {"id": "t1", "date": "2026-08-01", "type": "income", "title": "Salary", "amount": {"value": "2500", "commodity": "EUR"}, "account": "bank/checking"},
+  {"id": "t2", "date": "2026-08-02", "type": "expense", "title": "Mercadona", "amount": {"value": "54.32", "commodity": "EUR"}, "account": "bank/checking", "category": "food"},
+  {"id": "t3", "date": "2026-08-05", "type": "transfer", "amount": {"value": "500", "commodity": "EUR"}, "from": "bank/checking", "to": "bank/savings"},
+  {"id": "t4", "date": "2026-08-10", "type": "buy", "asset": "VWCE", "quantity": "5", "price": {"value": "134.52", "commodity": "EUR"}, "account": "broker/ibkr"}
+]

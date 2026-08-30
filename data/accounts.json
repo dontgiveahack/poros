@@ -1,0 +1,5 @@
+[
+  {"id": "bank/checking", "type": "bank", "name": "Checking", "currency": "EUR"},
+  {"id": "bank/savings", "type": "bank", "name": "Savings", "currency": "EUR"},
+  {"id": "broker/ibkr", "type": "broker", "name": "IBKR", "currency": "EUR"}
+]
