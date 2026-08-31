@@ -3,9 +3,11 @@ package main
 import (
 	"flag"
 	"fmt"
+	"net/http"
 	"os"
 	"sort"
 
+	"github.com/dontgiveahack/poros/internal/api"
 	"github.com/dontgiveahack/poros/internal/config"
 	"github.com/dontgiveahack/poros/internal/domain"
 	"github.com/dontgiveahack/poros/internal/store"
@@ -20,6 +22,7 @@ Commands:
   version    Print the poros version
   init       Initialise a new poros project
   balance    Show balances per account
+  serve      Start the HTTP API server
   help       Show this help
 
 Run 'poros balance -h' for balance options.
@@ -37,6 +40,8 @@ func main() {
 		fmt.Println("poros v0.0.1")
 	case "balance":
 		code = runBalance(os.Args[2:])
+	case "serve":
+		code = runServe(os.Args[2:])
 	case "init":
 		code = runInit(os.Args[2:])
 	case "help", "-h", "--help":
@@ -91,6 +96,24 @@ func runBalance(args []string) int {
 			amount := balances[account][domain.Commodity(c)]
 			fmt.Printf("%-24s %12s\n", account, amount.String())
 		}
+	}
+
+	return 0
+}
+
+func runServe(args []string) int {
+	fs := flag.NewFlagSet("serve", flag.ContinueOnError)
+	addr := fs.String("addr", ":8080", "listen address")
+	dataDir := fs.String("data", "data", "data directory")
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+
+	srv := api.New(*dataDir)
+	fmt.Printf("poros serve on http://localhost%s (data=%s)\n", *addr, *dataDir)
+	if err := http.ListenAndServe(*addr, srv.Handler()); err != nil {
+		fmt.Fprintf(os.Stderr, "serve: %v\n", err)
+		return 1
 	}
 
 	return 0
