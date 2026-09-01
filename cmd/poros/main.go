@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"net/http"
@@ -10,6 +11,7 @@ import (
 	"github.com/dontgiveahack/poros/internal/api"
 	"github.com/dontgiveahack/poros/internal/config"
 	"github.com/dontgiveahack/poros/internal/domain"
+	"github.com/dontgiveahack/poros/internal/pgstore"
 	"github.com/dontgiveahack/poros/internal/store"
 )
 
@@ -105,8 +107,38 @@ func runServe(args []string) int {
 	fs := flag.NewFlagSet("serve", flag.ContinueOnError)
 	addr := fs.String("addr", ":8080", "listen address")
 	dataDir := fs.String("data", "data", "data directory")
+	dbURL := fs.String("db", "", "postgres DSN (e.g. postgres://poros:poros@localhost:5432/poros?sslmode=disable)")
 	if err := fs.Parse(args); err != nil {
 		return 2
+	}
+
+	// Optional JSONB sync on startup if --db given
+	if *dbURL != "" {
+		ctx := context.Background()
+		ps, err := pgstore.New(ctx, *dbURL)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "db connect: %v\n", err)
+			return 1
+		}
+		defer ps.Close()
+
+		if err := ps.Migrate(ctx); err != nil {
+			fmt.Fprintf(os.Stderr, "migrate: %v\n", err)
+			return 1
+		}
+
+		ledger, err := store.LoadDir(*dataDir)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "load %s: %v\n", *dataDir, err)
+			return 1
+		}
+
+		if err := ps.Sync(ctx, ledger); err != nil {
+			fmt.Fprintf(os.Stderr, "sync: %v\n", err)
+			return 1
+		}
+
+		fmt.Printf("synced %d transactions to postgres\n", len(ledger.Transactions))
 	}
 
 	srv := api.New(*dataDir)

@@ -1,0 +1,18 @@
+services:
+  db:
+    image: docker.io/library/postgres:16-alpine
+    environment:
+      POSTGRES_USER: poros
+      POSTGRES_PASSWORD: poros
+      POSTGRES_DB: poros
+    ports:
+      - "5432:5432"
+#    volumes:
+#      - pgdata:/var/lib/postgresql/data
+#    healthcheck:
+#      test: ["CMD-SHELL", "pg_isready -U poros"]
+#      interval: 2s
+#      retries: 10
+
+#volumes:
+#  pgdata
