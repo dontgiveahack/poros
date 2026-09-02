@@ -20,11 +20,13 @@ func date(s string) Date {
 	return Date{Time: t}
 }
 
+func ptr(a Amount) *Amount { return &a }
+
 func TestCalculateBalances(t *testing.T) {
 	txs := []Transaction{
-		{ID: "t1", Date: date("2026-08-02"), Type: TxExpense,  Amount: mustParse(t, "54.32 EUR"), Account: "bank/checking"},
-		{ID: "t2", Date: date("2026-08-05"), Type: TxTransfer, Amount: mustParse(t, "500 EUR"),   From: "bank/checking", To: "bank/savings"},
-		{ID: "t3", Date: date("2026-08-06"), Type: TxIncome,   Amount: mustParse(t, "2500 EUR"),  Account: "bank/checking"},
+		{ID: "t1", Date: date("2026-08-02"), Type: TxExpense,  Amount: ptr(mustParse(t, "54.32 EUR")), Account: "bank/checking"},
+		{ID: "t2", Date: date("2026-08-05"), Type: TxTransfer, Amount: ptr(mustParse(t, "500 EUR")),   From: "bank/checking", To: "bank/savings"},
+		{ID: "t3", Date: date("2026-08-06"), Type: TxIncome,   Amount: ptr(mustParse(t, "2500 EUR")),  Account: "bank/checking"},
 	}
 
 	bals, err := CalculateBalances(txs)

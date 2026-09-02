@@ -82,7 +82,7 @@ type Transaction struct {
 	Date     Date      `json:"date"`
 	Type     TxType    `json:"type"`
 	Title    string    `json:"title,omitempty"`
-	Amount   Amount    `json:"amount"`
+	Amount   *Amount   `json:"amount,omitempty"`
 	Account  string    `json:"account,omitempty"`
 	Category string    `json:"category,omitempty"`
 	Tags     []string  `json:"tags,omitempty"`
@@ -121,7 +121,16 @@ func (t Transaction) Validate() error {
 	}
 
 	switch t.Type {
+	case TxIncome, TxExpense, TxFee, TxDividend, TxInterest:
+		if t.Amount == nil {
+			return fmt.Errorf("tx %q: %s needs amount", t.ID, t.Type)
+		}
+
 	case TxTransfer:
+		if t.Amount == nil {
+			return fmt.Errorf("tx %q: transfer needs amount", t.ID)
+		}
+
 		if t.From == "" || t.To == "" {
 			return fmt.Errorf("tx %q: transfer needs from and to", t.ID)
 		}

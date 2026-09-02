@@ -13,6 +13,7 @@ import (
 	"github.com/dontgiveahack/poros/internal/domain"
 	"github.com/dontgiveahack/poros/internal/pgstore"
 	"github.com/dontgiveahack/poros/internal/store"
+	"github.com/dontgiveahack/poros/internal/verify"
 )
 
 const usage = `poros - personal finance manager
@@ -25,6 +26,7 @@ Commands:
   init       Initialise a new poros project
   balance    Show balances per account
   serve      Start the HTTP API server
+  verify     Compare data/*.json with the DB mirror
   help       Show this help
 
 Run 'poros balance -h' for balance options.
@@ -46,6 +48,8 @@ func main() {
 		code = runServe(os.Args[2:])
 	case "init":
 		code = runInit(os.Args[2:])
+	case "verify":
+		code = runVerify(os.Args[2:])
 	case "help", "-h", "--help":
 		fmt.Print(usage)
 	default:
@@ -183,4 +187,52 @@ func runInit(args []string) int {
 	fmt.Printf("initialised %s and %s\n", tomlPath, dataDir)
 
 	return 0
+}
+
+func runVerify(args []string) int {
+	fs := flag.NewFlagSet("verify", flag.ContinueOnError)
+	dataDir := fs.String("data", "data", "data directory")
+	dbURL := fs.String("db", "", "postgres DSN")
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+
+	if *dbURL == "" {
+		fmt.Fprintln(os.Stderr, "verify: --db is required")
+		return 2
+	}
+
+	fileLedger, err := store.LoadDir(*dataDir)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "load %s: %v\n", *dataDir, err)
+		return 1
+	}
+
+	ctx := context.Background()
+	ps, err := pgstore.New(ctx, *dbURL)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "db connect: %v\n", err)
+		return 1
+	}
+
+	defer ps.Close()
+
+	dbLedger, err := ps.LoadLedger(ctx)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "load db: %v\n", err)
+		return 1
+	}
+
+	diffs := verify.Diff(fileLedger, dbLedger)
+	if len(diffs) == 0 {
+		fmt.Println("verify: OK - file and DB are identical")
+		return 0
+	}
+
+	fmt.Println("verify: differences found:")
+	for _, d := range diffs {
+		fmt.Printf("  - %s\n", d)
+	}
+
+	return 1
 }

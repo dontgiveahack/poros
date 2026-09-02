@@ -17,6 +17,8 @@ func dsn() string {
 	return "postgres://poros:poros@localhost:5432/poros?sslmode=disable"
 }
 
+func ptr(a domain.Amount) *domain.Amount { return &a }
+
 func TestSyncAndLoad(t *testing.T) {
 	ctx := context.Background()
 	s, err := New(ctx, dsn())
@@ -36,7 +38,7 @@ func TestSyncAndLoad(t *testing.T) {
 	ledger := &store.Ledger{
 		Accounts: []domain.Account{{ID: "bank/checking", Type: "bank", Name: "Checking", Currency: "EUR"}},
 		Transactions: []domain.Transaction{
-			{ID: "t1", Type: "expense", Amount: mustParsePG(t, "10 EUR"), Account: "bank/checking"},
+			{ID: "t1", Type: "expense", Amount: ptr(mustParsePG(t, "10 EUR")), Account: "bank/checking"},
 			{ID: "b1", Type: "buy", Asset: "VWCE", Quantity: "2", Price: &price, Account: "bank/checking"},
 		},
 	}
