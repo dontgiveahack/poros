@@ -56,3 +56,13 @@ db-logs:
 
 db-psql:
 	$(COMPOSE) exec db psql -U poros -c "SELECT id, data->>'title' FROM transactions ORDER BY id;"
+
+# docker
+docker-build:
+	podman build -t poros:dev .
+
+docker-up:
+	podman compose up --build -d
+
+docker-down:
+	podman compose down
