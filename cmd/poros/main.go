@@ -11,6 +11,7 @@ import (
 	"github.com/dontgiveahack/poros/internal/api"
 	"github.com/dontgiveahack/poros/internal/config"
 	"github.com/dontgiveahack/poros/internal/domain"
+	"github.com/dontgiveahack/poros/internal/fire"
 	"github.com/dontgiveahack/poros/internal/pgstore"
 	"github.com/dontgiveahack/poros/internal/store"
 	"github.com/dontgiveahack/poros/internal/verify"
@@ -27,6 +28,7 @@ Commands:
   balance    Show balances per account
   serve      Start the HTTP API server
   verify     Compare data/*.json with the DB mirror
+  report     FIRE and savings report
   help       Show this help
 
 Run 'poros balance -h' for balance options.
@@ -50,6 +52,8 @@ func main() {
 		code = runInit(os.Args[2:])
 	case "verify":
 		code = runVerify(os.Args[2:])
+	case "report":
+		code = runReport(os.Args[2:])
 	case "help", "-h", "--help":
 		fmt.Print(usage)
 	default:
@@ -235,4 +239,48 @@ func runVerify(args []string) int {
 	}
 
 	return 1
+}
+
+func runReport(args []string) int {
+	fs := flag.NewFlagSet("report", flag.ContinueOnError)
+	dataDir := fs.String("data", "data", "data directory")
+	year := fs.Int("year", 0, "calendar year (default current)")
+	withdrawal := fs.Float64("withdrawal", 0.04, "withdrawal rate")
+	ret := fs.Float64("return", 0.05, "expected annual return")
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+
+	if fs.NArg() < 1 || fs.Arg(0) != "fire" {
+		fmt.Fprintln(os.Stderr, "usage: poros report fire [--year N]")
+		return 2
+	}
+
+	ledger, err := store.LoadDir(*dataDir)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "load %s: %v\n", *dataDir, err)
+		return 1
+	}
+
+	s, err := fire.Calculate(ledger, fire.Options{Year: *year, WithdrawalRate: *withdrawal, ExpectedReturn: *ret})
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "calculate: %v\n", err)
+		return 1
+	}
+
+	fmt.Printf("FIRE report %d\n", s.Year)
+	fmt.Printf("  Net worth:       %12s\n", s.NetWorth.String())
+	fmt.Printf("  Annual income:   %12s\n", s.AnnualIncome.String())
+	fmt.Printf("  Annual expenses: %12s\n", s.AnnualExpenses.String())
+	fmt.Printf("  Annual savings:  %12s\n", s.AnnualSavings.String())
+	fmt.Printf("  Savings rate:    %11.1f%%\n", s.SavingsRate*100)
+	fmt.Printf("  FIRE number:     %12s\n", s.FireNumber.String())
+
+	if s.YearsToFire < 0 {
+		fmt.Printf("  Years to FIRE: never at current pace\n")
+	} else {
+		fmt.Printf("  Years to FIRE: %11.1f\n", s.YearsToFire)
+	}
+
+	return 0
 }

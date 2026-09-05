@@ -24,7 +24,7 @@ func CalculateBalances(txs []Transaction) (Balances, error) {
 
 		case TxIncome:
 			if err := add(balances, tx.Account, *tx.Amount); err != nil {
-				return nil, fmt.Errorf("ts %s: %w", tx.ID, err)
+				return nil, fmt.Errorf("tx %s: %w", tx.ID, err)
 			}
 
 		case TxTransfer:

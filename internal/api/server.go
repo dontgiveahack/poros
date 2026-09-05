@@ -3,9 +3,11 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 
 	"github.com/dontgiveahack/poros/internal/domain"
+	"github.com/dontgiveahack/poros/internal/fire"
 	"github.com/dontgiveahack/poros/internal/store"
 )
 
@@ -23,6 +25,7 @@ func New(dataDir string) *Server {
 	s.mux.HandleFunc("GET /api/v1/transactions", s.handleTransactions)
 	s.mux.HandleFunc("GET /api/v1/balances", s.handleBalances)
 	s.mux.HandleFunc("GET /api/v1/goals", s.handleGoals)
+	s.mux.HandleFunc("GET /api/v1/fire", s.handleFire)
 	return s
 }
 
@@ -101,6 +104,34 @@ func (s *Server) handleBalances(w http.ResponseWriter, _ *http.Request) {
 	}
 
 	writeJSON(w, out)
+}
+
+func (s *Server) handleFire(w http.ResponseWriter, r *http.Request) {
+	year := atoiQuery(r, "year", 0)
+	l, err := store.LoadDir(s.dataDir)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	sum, err := fire.Calculate(l, fire.Options{Year: year})
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	writeJSON(w, sum)
+}
+
+func atoiQuery(r *http.Request, key string, def int) int {
+	v := r.URL.Query().Get(key)
+	if v == "" {
+		return def
+	}
+
+	var n int
+	fmt.Sscanf(v, "%d", &n)
+	return n
 }
 
 func writeJSON(w http.ResponseWriter, v any) {
