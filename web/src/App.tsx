@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 
 type Amount = { value: string; commodity: string }
 type BalanceRow = { account: string; commodity: string; amount: Amount }
@@ -32,11 +32,30 @@ function accountLabel(r: Tx): string {
 	return r.account ?? "—"
 }
 
+function matchesAccount(r: Tx, acct: string): boolean {
+	if (!acct) return true
+	return r.account === acct || r.from === acct || r.to === acct
+}
+
+function matchesSearch(r: Tx, q: string): boolean {
+	if (!q) return true
+	const hay = [r.title ?? "", r.category ?? "", r.asset ?? "", ...(r.tags ?? [])]
+		.join(" ")
+		.toLowerCase()
+	return hay.includes(q.toLowerCase())
+}
+
 export default function App() {
 	const [tab, setTab] = useState<"balances" | "transactions">("balances")
 	const [rows, setRows] = useState<BalanceRow[] | null>(null)
 	const [txs, setTxs] = useState<Tx[] | null>(null)
 	const [error, setError] = useState<string | null>(null)
+
+	// Filters
+	const [fAccount, setFAccount] = useState("")
+	const [fType, setFType] = useState("")
+	const [fCategory, setFCategory] = useState("")
+	const [fSearch, setFSearch] = useState("")
 
 	useEffect(() => {
 		Promise.all([
@@ -55,6 +74,55 @@ export default function App() {
 			})
 			.catch((e) => setError(String(e)))
 	}, [])
+
+	// Option lists derived from data
+	const accounts = useMemo(() => {
+		const s = new Set<string>()
+		for (const t of txs ?? []) {
+			if (t.account) s.add(t.account)
+			if (t.from) s.add(t.from)
+			if (t.to) s.add(t.to)
+		}
+
+		return [...s].sort()
+	}, [txs])
+
+	const types = useMemo(() => {
+		const s = new Set<string>()
+		for (const t of txs ?? []) s.add(t.type)
+		return [...s].sort()
+	}, [txs])
+
+	const categories = useMemo(() => {
+		const s = new Set<string>()
+		for (const t of txs ?? []) if (t.category) s.add(t.category)
+		return [...s].sort()
+	}, [txs])
+
+	const filtered = useMemo(() => {
+		return (txs ?? [])
+			.filter((t) => matchesAccount(t, fAccount))
+			.filter((t) => !fType || t.type === fType)
+			.filter((t) => !fCategory || t.category === fCategory)
+			.filter((t) => matchesSearch(t, fSearch))
+			.slice()
+			.sort((a, b) => b.date.localeCompare(a.date))
+	}, [txs, fAccount, fType, fCategory, fSearch])
+
+	const hasFilters = fAccount || fType || fCategory || fSearch
+	const clearFilters = () => {
+		setFAccount("")
+		setFType("")
+		setFCategory("")
+		setFSearch("")
+	}
+
+	const inputStyle: React.CSSProperties = {
+		padding: "0.4rem 0.5rem",
+		border: "1px solid #ccc",
+		borderRadius: 4,
+		fontSize: "0.85rem",
+	}
 
 	return (
 		<main style={{ fontFamily: "system-ui, sans-serif", padding: "2rem", maxWidth: 900, margin: "0 auto" }}>
@@ -87,36 +155,73 @@ export default function App() {
 				>Transactions</button>
 			</nav>
 
-            {error && <p style={{ color: "crimson" }}>Error: {error}</p>}
+			{error && <p style={{ color: "crimson" }}>Error: {error}</p>}
 			{!rows && !txs && !error && <p>Loading...</p>}
 
-            {tab === "balances" && rows && (
-                <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                    <thead>
-                        <tr style={{ textAlign: "left", borderBottom: "2px solid #ccc" }}>
-                            <th>Account</th>
-                            <th>Commodity</th>
-                            <th style={{ textAlign: "right" }}>Amount</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {rows
-                            .slice()
-                            .sort((a, b) => a.account.localeCompare(b.account) || a.commodity.localeCompare(b.commodity))
-                            .map((r) => (
-                                <tr key={`${r.account}:${r.commodity}`} style={{ borderBottom: "1px solid #eee" }}>
-                                    <td>{r.account}</td>
-                                    <td>{r.commodity}</td>
-                                    <td style={{ textAlign: "right" }}>
-                                        {r.amount.value} {r.amount.commodity}
-                                    </td>
-                                </tr>
-                            ))}
-                    </tbody>
-                </table>
-            )}
+			{tab === "balances" && rows && (
+				<table style={{ width: "100%", borderCollapse: "collapse" }}>
+				    <thead>
+					<tr style={{ textAlign: "left", borderBottom: "2px solid #ccc" }}>
+					    <th>Account</th>
+					    <th>Commodity</th>
+					    <th style={{ textAlign: "right" }}>Amount</th>
+					</tr>
+				    </thead>
+				    <tbody>
+					{rows
+					    .slice()
+					    .sort((a, b) => a.account.localeCompare(b.account) || a.commodity.localeCompare(b.commodity))
+					    .map((r) => (
+						<tr key={`${r.account}:${r.commodity}`} style={{ borderBottom: "1px solid #eee" }}>
+						    <td>{r.account}</td>
+						    <td>{r.commodity}</td>
+						    <td style={{ textAlign: "right" }}>
+							{r.amount.value} {r.amount.commodity}
+						    </td>
+						</tr>
+					    ))}
+				    </tbody>
+				</table>
+			)}
 
-            {tab === "transactions" && txs && (
+			{tab === "transactions" && txs && (
+			<>
+				<div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", marginBottom: "1rem" }}>
+					<select value={fAccount} onChange={(e) =>setFAccount(e.target.value)} style={inputStyle} aria-label="Account">
+						<option value="">All accounts</option>
+						{accounts.map((a) => (
+							<option key={a} value={a}>{a}</option>
+						))}
+					</select>
+					<select value={fType} onChange={(e) => setFType(e.target.value)} style={inputStyle} aria-label="Type">
+						<option value="">All types</option>
+						{types.map((t) => (
+							<option key={t} value={t}>{t}</option>
+						))}
+					</select>
+					<select value={fCategory} onChange={(e) => setFCategory(e.target.value)} style={inputStyle} aria-label="Category">
+						<option value="">All categories</option>
+						{categories.map((c) => (
+							<option key={c} value={c}>{c}</option>
+						))}
+					</select>
+					<input
+						value={fSearch}
+						onChange={(e) => setFSearch(e.target.value)}
+						placeholder="Search title, asset, tag..."
+						style={{ ...inputStyle, minWidth: 200 }}
+					/>
+					{hasFilters && (
+						<button onClick={clearFilters} style={{ ...inputStyle, cursor: "pointer" }}>
+							Clear ✕
+						</button>
+					)}
+				</div>
+
+				<p style={{ color: "#666", fontSize: "0.85rem" }}>
+					{filtered.length} of {txs.length} transactions
+				</p>
+
 				<table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.9rem" }}>
 					<thead>
 						<tr style={{ textAlign: "left", borderBottom: "2px solid #ccc" }}>
@@ -129,29 +234,26 @@ export default function App() {
 						</tr>
 					</thead>
 					<tbody>
-						{txs
-							.slice()
-							.sort((a, b) => b.date.localeCompare(a.date))
-							.map((r) => (
-								<tr key={r.id} style={{ borderBottom: "1px solid #eee" }}>
-                                    <td style={{ whiteSpace: "nowrap" }}>{r.date.slice(0, 10)}</td>
-									<td>{r.type}</td>
-									<td>{r.title ?? "-"}</td>
-									<td style={{ textAlign: "right", whiteSpace: "nowrap" }}>{formatTx(r)}</td>
-									<td>{accountLabel(r)}</td>
-									<td>{r.category ?? "-"}</td>
-								</tr>
-							))
-						}
-						{txs.length === 0 && (
+						{filtered.map((r) => (
+							<tr key={r.id} style={{ borderBottom: "1px solid #eee" }}>
+								<td style={{ whiteSpace: "nowrap" }}>{r.date.slice(0, 10)}</td>
+								<td>{r.type}</td>
+								<td>{r.title ?? "-"}</td>
+								<td style={{ textAlign: "right", whiteSpace: "nowrap" }}>{formatTx(r)}</td>
+								<td>{accountLabel(r)}</td>
+								<td>{r.category ?? "-"}</td>
+							</tr>
+						))}
+						{filtered.length === 0 && (
 							<tr>
 								<td colSpan={6} style={{ textAlign: "center", padding: "1rem", color: "#999" }}>
-									No transactions
+									No matching transactions
 								</td>
 							</tr>
 						)}
 					</tbody>
 				</table>
+			</>
 			)}
 		</main>
 	)
