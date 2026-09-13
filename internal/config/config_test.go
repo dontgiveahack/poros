@@ -38,7 +38,9 @@ func TestWriteAndLoad(t *testing.T) {
 func TestWriteDoesNotOverwrite(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "poros.toml")
-	os.WriteFile(path, []byte(`currency = "USD"`), 0o644)
+	if err := os.WriteFile(path, []byte(`currency = "USD"`), 0o644); err != nil {
+		t.Fatalf("setup WriteFile: %v", err)
+	}
 
 	if err := Write(path, Default()); err == nil {
 		t.Fatal("second Write should fail")

@@ -1,3 +1,4 @@
+// Command poros is the Póros Manager CLI.
 package main
 
 import (
@@ -128,7 +129,11 @@ func runServe(args []string) int {
 			fmt.Fprintf(os.Stderr, "db connect: %v\n", err)
 			return 1
 		}
-		defer ps.Close()
+		defer func() {
+			if err := ps.Close(); err != nil {
+				fmt.Fprintln(os.Stderr, "close db:", err)
+			}
+		}()
 
 		if err := ps.Migrate(ctx); err != nil {
 			fmt.Fprintf(os.Stderr, "migrate: %v\n", err)
@@ -184,7 +189,10 @@ func runInit(args []string) int {
 	for _, name := range[]string{"accounts.json", "transactions.json", "assets.json", "goals.json"} {
 		p := fmt.Sprintf("%s/%s", dataDir, name)
 		if _, err := os.Stat(p); os.IsNotExist(err) {
-			os.WriteFile(p, []byte("[]\n"), 0o644)
+			if err := os.WriteFile(p, []byte("[]\n"), 0o644); err != nil {
+				fmt.Fprintf(os.Stderr, "write %s: %v\n", p, err)
+				return 1
+			}
 		}
 	}
 
@@ -219,7 +227,11 @@ func runVerify(args []string) int {
 		return 1
 	}
 
-	defer ps.Close()
+	defer func() {
+		if err := ps.Close(); err != nil {
+			fmt.Fprintln(os.Stderr, "close db:", err)
+		}
+	}()
 
 	dbLedger, err := ps.LoadLedger(ctx)
 	if err != nil {
@@ -227,7 +239,12 @@ func runVerify(args []string) int {
 		return 1
 	}
 
-	diffs := verify.Diff(fileLedger, dbLedger)
+	diffs, err := verify.Diff(fileLedger, dbLedger)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "diff: %v\n", err)
+		return 1
+	}
+
 	if len(diffs) == 0 {
 		fmt.Println("verify: OK - file and DB are identical")
 		return 0

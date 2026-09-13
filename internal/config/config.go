@@ -16,6 +16,7 @@ type Config struct {
 	Locale   Locale `toml:"locale"`
 }
 
+// Locale holds display conventions (language, decimal separator).
 type Locale struct {
 	Language string `toml:"language"`
 	Decimal  string `toml:"decimal"`
@@ -52,8 +53,8 @@ func Load(path string) (Config, error) {
 
 // Write creates poros.toml at path with defaults if it does not exist.
 // It never overwrites an existing file.
-func Write(path string, cfg Config) error {
-	if _, err := os.Stat(path); err == nil {
+func Write(path string, cfg Config) (err error) {
+	if _, statErr := os.Stat(path); statErr == nil {
 		return fmt.Errorf("%s already exists", path)
 	}
 
@@ -61,8 +62,12 @@ func Write(path string, cfg Config) error {
 	if err != nil {
 		return err
 	}
-	defer f.Close()
 
-	enc := toml.NewEncoder(f)
-	return enc.Encode(cfg)
+	defer func() {
+		if cerr := f.Close(); cerr != nil && err == nil {
+			err = cerr
+		}
+	}()
+
+	return toml.NewEncoder(f).Encode(cfg)
 }

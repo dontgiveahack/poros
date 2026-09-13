@@ -9,14 +9,17 @@ import (
 	"time"
 )
 
+// Date is a calendar date (YYYY-MM-DD) without time zone.
 type Date struct {
 	time.Time
 }
 
+// MarshalJSON encodes the date as "YYYY-MM-DD"
 func (d Date) MarshalJSON() ([]byte, error) {
-	return json.Marshal(d.Time.Format("2006-01-02"))
+	return json.Marshal(d.Format("2006-01-02"))
 }
 
+// UnmarshalJSON decodes a "YYYY-MM-DD" date string.
 func (d *Date) UnmarshalJSON(b []byte) error {
 	var s string
 	if err := json.Unmarshal(b, &s); err != nil {
@@ -34,8 +37,10 @@ func (d *Date) UnmarshalJSON(b []byte) error {
 
 // --- Account ---
 
+// AccountType classifies an account: bank, broker, crypto or cash.
 type AccountType string
 
+// Supported account types.
 const (
 	AccountBank AccountType = "bank"
 	AccountBroker AccountType = "broker"
@@ -43,6 +48,8 @@ const (
 	AccountCash AccountType = "cash"
 )
 
+// Account is a money holder (bank account, broker, wallet...).
+// Its ID is a hierarchical path like "bank/checking".
 type Account struct {
 	ID       string      `json:"id"`
 	Type     AccountType `json:"type"`
@@ -50,6 +57,7 @@ type Account struct {
 	Currency Commodity   `json:"currency"`
 }
 
+// Validate checks the account invariants.
 func (a Account) Validate() error {
 	if a.ID == "" {
 		return fmt.Errorf("account: empty id")
@@ -64,8 +72,10 @@ func (a Account) Validate() error {
 
 // --- Transaction ---
 
+// TxType classifies a transaction.
 type TxType string
 
+// Supported transaction types.
 const (
 	TxIncome   TxType = "income"
 	TxExpense  TxType = "expense"
@@ -77,6 +87,8 @@ const (
 	TxFee      TxType = "fee"
 )
 
+// Transaction is a single financial event: income, expense, transfer,
+// asset buy/sell, dividend, interest or fee.
 type Transaction struct {
 	ID       string    `json:"id"`
 	Date     Date      `json:"date"`
@@ -111,6 +123,8 @@ func (t Transaction) QuantityRat() (*big.Rat, error) {
 	return r, nil
 }
 
+// Validate checks the transaction invariants for its type
+// (amount required, from/to for transfers, asset/quantity/price for trades).
 func (t Transaction) Validate() error {
 	if t.ID == "" {
 		return fmt.Errorf("transaction: empty id")
@@ -154,8 +168,10 @@ func (t Transaction) Validate() error {
 
 // --- Asset ---
 
+// AssetClass classifies an asset: stock, ETF, bond, crypto, cash or other.
 type AssetClass string
 
+// Supported asset classes.
 const (
 	AssetStock  AssetClass = "stock"
 	AssetETF    AssetClass = "etf"
@@ -165,12 +181,14 @@ const (
 	AssetOther  AssetClass = "other"
 )
 
+// Asset is an investable instrument (stock, ETF, crypto...).
 type Asset struct {
 	ID    string `json:"id"`
 	Class string `json:"class"`
 	Name  string `json:"name,omitempty"`
 }
 
+// Validate checks the asset invariants.
 func (a Asset) Validate() error {
 	if a.ID == "" {
 		return fmt.Errorf("asset: empty id")
@@ -181,14 +199,17 @@ func (a Asset) Validate() error {
 
 // --- Goal ---
 
+// GoalState is the lifecycle state of a goal.
 type GoalState string
 
+// Supported goal states.
 const (
 	GoalOpen      GoalState = "open"
 	GoalDone      GoalState = "done"
 	GoalCancelled GoalState = "cancelled"
 )
 
+// Goal is a financial target with an optional deadline.
 type Goal struct {
 	ID     string    `json:"id"`
 	Title  string    `json:"title"`
@@ -197,6 +218,7 @@ type Goal struct {
 	Date   string    `json:"date,omitempty"`
 }
 
+// Validate checks the goal invariants.
 func (g Goal) Validate() error {
 	if g.ID == "" {
 		return fmt.Errorf("goal: empty id")

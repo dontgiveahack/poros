@@ -20,7 +20,10 @@ func TestHealth(t *testing.T) {
 	}
 
 	var body map[string]string
-	json.Unmarshal(rec.Body.Bytes(), &body)
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("unmarshal health: %v", err)
+	}
+
 	if body["status"] != "ok" {
 		t.Errorf("body = %v", body)
 	}
@@ -28,9 +31,11 @@ func TestHealth(t *testing.T) {
 
 func TestBalances(t *testing.T) {
 	dir := t.TempDir()
-	os.WriteFile(filepath.Join(dir, "transactions.json"), []byte(`[
+	if err := os.WriteFile(filepath.Join(dir, "transactions.json"), []byte(`[
 	  {"id":"t1","date":"2026-08-02","type":"expense","amount":{"value":"10","commodity":"EUR"},"account":"bank/checking"}
-	]`), 0o644)
+	]`), 0o644); err != nil {
+		t.Fatalf("setup WriteFile: %v", err)
+	}
 
 	s := New(dir)
 	req := httptest.NewRequest("GET", "/api/v1/balances", nil)

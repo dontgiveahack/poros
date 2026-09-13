@@ -3,8 +3,9 @@ package api
 
 import (
 	"encoding/json"
-	"fmt"
+	"log/slog"
 	"net/http"
+	"strconv"
 
 	"github.com/dontgiveahack/poros/internal/domain"
 	"github.com/dontgiveahack/poros/internal/fire"
@@ -38,7 +39,9 @@ func (s *Server) Handler() http.Handler {
 }
 
 func (s *Server) handleHealth(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, map[string]string{"status": "ok"})
+	if err := writeJSON(w, map[string]string{"status": "ok"}); err != nil {
+		slog.Error("encode health", "err", err)
+	}
 }
 
 func (s *Server) handleAccounts(w http.ResponseWriter, _ *http.Request) {
@@ -48,7 +51,9 @@ func (s *Server) handleAccounts(w http.ResponseWriter, _ *http.Request) {
 		return
 	}
 
-	writeJSON(w, l.Accounts)
+	if err := writeJSON(w, l.Accounts); err != nil {
+		slog.Error("encode accounts", "err", err)
+	}
 }
 
 func (s *Server) handleTransactions(w http.ResponseWriter, _ *http.Request) {
@@ -58,7 +63,9 @@ func (s *Server) handleTransactions(w http.ResponseWriter, _ *http.Request) {
 		return
 	}
 
-	writeJSON(w, l.Transactions)
+	if err := writeJSON(w, l.Transactions); err != nil {
+		slog.Error("encode transactions", "err", err)
+	}
 }
 
 func (s *Server) handleGoals(w http.ResponseWriter, _ *http.Request) {
@@ -68,7 +75,9 @@ func (s *Server) handleGoals(w http.ResponseWriter, _ *http.Request) {
 		return
 	}
 
-	writeJSON(w, l.Goals)
+	if err := writeJSON(w, l.Goals); err != nil {
+		slog.Error("encode goals", "err", err)
+	}
 }
 
 func (s *Server) handleBalances(w http.ResponseWriter, _ *http.Request) {
@@ -103,7 +112,9 @@ func (s *Server) handleBalances(w http.ResponseWriter, _ *http.Request) {
 		}
 	}
 
-	writeJSON(w, out)
+	if err := writeJSON(w, out); err != nil {
+		slog.Error("encode balances", "err", err)
+	}
 }
 
 func (s *Server) handleFire(w http.ResponseWriter, r *http.Request) {
@@ -120,7 +131,9 @@ func (s *Server) handleFire(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, sum)
+	if err := writeJSON(w, sum); err != nil {
+		slog.Error("encode fire", "err", err)
+	}
 }
 
 func atoiQuery(r *http.Request, key string, def int) int {
@@ -129,12 +142,15 @@ func atoiQuery(r *http.Request, key string, def int) int {
 		return def
 	}
 
-	var n int
-	fmt.Sscanf(v, "%d", &n)
+	n, err := strconv.Atoi(v)
+	if err != nil {
+		return def
+	}
+
 	return n
 }
 
-func writeJSON(w http.ResponseWriter, v any) {
+func writeJSON(w http.ResponseWriter, v any) error {
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(v)
+	return json.NewEncoder(w).Encode(v)
 }

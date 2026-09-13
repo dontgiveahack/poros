@@ -9,32 +9,90 @@ import (
 )
 
 // Diff returns human-readable differences.
-func Diff(a, b *store.Ledger) []string {
+func Diff(a, b *store.Ledger) ([]string, error) {
 	var out []string
-	out = append(out, diffTable("accounts", toMap(a.Accounts), toMap(b.Accounts))...)
-	out = append(out, diffTable("assets", toMap(a.Assets), toMap(b.Assets))...)
-	out = append(out, diffTable("transactions", toMap(a.Transactions), toMap(b.Transactions))...)
-	out = append(out, diffTable("goals", toMap(a.Goals), toMap(b.Goals))...)
-	return out
+	for _, part := range []struct {
+		name string
+		x, y map[string]json.RawMessage
+	}{} {
+		_ = part
+	}
+
+	accA, err := toMap(a.Accounts)
+	if err != nil {
+		return nil, fmt.Errorf("accounts: %w", err)
+	}
+
+	accB, err := toMap(b.Accounts)
+	if err != nil {
+		return nil, fmt.Errorf("accounts: %w", err)
+	}
+
+	out = append(out, diffTable("accounts", accA, accB)...)
+
+	txA, err := toMap(a.Transactions)
+	if err != nil {
+		return nil, fmt.Errorf("transactions: %w", err)
+	}
+
+	txB, err := toMap(b.Transactions)
+	if err != nil {
+		return nil, fmt.Errorf("transactions: %w", err)
+	}
+
+	out = append(out, diffTable("transactions", txA, txB)...)
+
+	goA, err := toMap(a.Goals)
+	if err != nil {
+		return nil, fmt.Errorf("goals: %w", err)
+	}
+
+	goB, err := toMap(b.Goals)
+	if err != nil {
+		return nil, fmt.Errorf("goals: %w", err)
+	}
+
+	out = append(out, diffTable("goals", goA, goB)...)
+
+	asA, err := toMap(a.Assets)
+	if err != nil {
+		return nil, fmt.Errorf("assets: %w", err)
+	}
+
+	asB, err := toMap(b.Assets)
+	if err != nil {
+		return nil, fmt.Errorf("assets: %w", err)
+	}
+
+	out = append(out, diffTable("assets", asA, asB)...)
+
+	return out, nil
 }
 
-type withID interface{ GetId() string }
-
-// Helper: convert slice of structs with ID field to map[id]rawJSON.
-func toMap[T any](items []T) map[string]json.RawMessage {
+// toMap indexes records by their JSON id field.
+func toMap[T any](items []T) (map[string]json.RawMessage, error) {
 	m := make(map[string]json.RawMessage, len(items))
-	for _, it := range items {
-		raw, _ := json.Marshal(it)
-		var tmp struct{ ID string `json:"id"` }
-		json.Unmarshal(raw, &tmp)
+	for i, it := range items {
+		raw, err := json.Marshal(it)
+		if err != nil {
+			return nil, fmt.Errorf("[%d]: %w", i, err)
+		}
+
+		var tmp struct{
+			ID string `json:"id"`
+		}
+		if err := json.Unmarshal(raw, &tmp); err != nil {
+			return nil, fmt.Errorf("[%d]: %w", i, err)
+		}
+
 		if tmp.ID == "" {
-			tmp.ID = fmt.Sprintf("%p", &it)
+			return nil, fmt.Errorf("[%d]: missing id", i)
 		}
 
 		m[tmp.ID] = raw
 	}
 
-	return m
+	return m, nil
 }
 
 func diffTable(name string, a, b map[string]json.RawMessage) []string {

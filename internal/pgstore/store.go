@@ -1,4 +1,4 @@
-// Package pgstroe mirrors Póros JSON documents into PostgreSQL JSONB.
+// Package pgstore mirrors Póros JSON documents into PostgreSQL JSONB.
 package pgstore
 
 import (
@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	// Register the pgx stdlib driver for database/sql.
 	_ "github.com/jackc/pgx/v5/stdlib"
 
 	"github.com/dontgiveahack/poros/internal/domain"
@@ -32,6 +33,7 @@ func New(ctx context.Context, connStr string) (*Store, error) {
 	return &Store{db: db}, nil
 }
 
+// Close releases the database connection pool.
 func (s *Store) Close() error {
 	return s.db.Close()
 }
@@ -48,12 +50,24 @@ func (s *Store) Migrate(ctx context.Context) error {
 }
 
 // Sync upserts every document from the file ledger into JSONB.
-func (s *Store) Sync(ctx context.Context, l *store.Ledger) error {
+func (s *Store) Sync(ctx context.Context, l *store.Ledger) (err error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+
+	defer func() {
+		if err != nil {
+			// Rollback on error
+			if rbErr := tx.Rollback(); rbErr != nil {
+				err = fmt.Errorf("%w (rollback: %v)", err, rbErr)
+			}
+
+			return
+		}
+
+		err = tx.Commit()
+	}()
 
 	for _, a := range l.Accounts {
 		if err := upsert(ctx, tx, "accounts", a.ID, a); err != nil {
@@ -79,7 +93,7 @@ func (s *Store) Sync(ctx context.Context, l *store.Ledger) error {
 		}
 	}
 
-	return tx.Commit()
+	return nil
 }
 
 // LoadLedger reads the JSONB mirror back into a Ledger (for verify/tests).
@@ -118,15 +132,19 @@ func upsert(ctx context.Context, tx *sql.Tx, table, id string, v any) error {
 	return err
 }
 
-func loadTable[T any](ctx context.Context, db *sql.DB, table string) ([]T, error) {
+func loadTable[T any](ctx context.Context, db *sql.DB, table string) (out []T, err error) {
 	rows, err := db.QueryContext(ctx, fmt.Sprintf(`
 	  SELECT data FROM %s ORDER BY id`, table))
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
 
-	var out []T
+	defer func() {
+		if cerr := rows.Close(); cerr != nil && err == nil {
+			err = cerr
+		}
+	}()
+
 	for rows.Next() {
 		var raw json.RawMessage
 		if err := rows.Scan(&raw); err != nil {

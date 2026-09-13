@@ -25,14 +25,21 @@ func TestSyncAndLoad(t *testing.T) {
 	if err != nil {
 		t.Skipf("no db: %v (run: docker compose up -d)", err)
 	}
-	defer s.Close()
+
+	t.Cleanup(func() {
+		if err := s.Close(); err != nil {
+			t.Errorf("close db: %v", err)
+		}
+	})
 
 	if err := s.Migrate(ctx); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
 
 	// Clean slate
-	s.db.ExecContext(ctx, `TRUNCATE accounts, assets, transactions, goals`)
+	if _, err := s.db.ExecContext(ctx, `TRUNCATE accounts, assets, transactions, goals`); err != nil {
+		t.Fatalf("truncate: %v", err)
+	}
 
 	price, _ := domain.ParseAmount("10 EUR")
 	ledger := &store.Ledger{

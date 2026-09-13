@@ -61,7 +61,7 @@ func Calculate(l *store.Ledger, opts Options) (*Summary, error) {
 	income = mustZero(cur)
 	expenses = mustZero(cur)
 	for _, tx := range l.Transactions {
-		if tx.Date.Time.Year() != opts.Year {
+		if tx.Date.Year() != opts.Year {
 			continue
 		}
 
