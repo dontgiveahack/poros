@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react"
+import { PortfolioTab, type Portfolio } from "./Portfolio"
 
 type Amount = { value: string; commodity: string }
 type BalanceRow = { account: string; commodity: string; amount: Amount }
@@ -46,9 +47,10 @@ function matchesSearch(r: Tx, q: string): boolean {
 }
 
 export default function App() {
-	const [tab, setTab] = useState<"balances" | "transactions">("balances")
+	const [tab, setTab] = useState<"balances" | "transactions" | "portfolio">("balances")
 	const [rows, setRows] = useState<BalanceRow[] | null>(null)
 	const [txs, setTxs] = useState<Tx[] | null>(null)
+	const [portfolio, setPortfolio] = useState<Portfolio | null>(null)
 	const [error, setError] = useState<string | null>(null)
 
 	// Filters
@@ -66,11 +68,16 @@ export default function App() {
 			fetch(`${API}/api/v1/transactions`).then((r) => {
 				if (!r.ok) throw new Error(`transactions ${r.status}`)
 				return r.json()
+			}),
+			fetch(`${API}/api/v1/portfolio`).then((r) => {
+				if (!r.ok) throw new Error(`portfolio ${r.status}`)
+				return r.json()
 			})
 		])
-			.then(([b, t]) => {
+			.then(([b, t, p]) => {
 				setRows(b)
 				setTxs(t)
+				setPortfolio(p)
 			})
 			.catch((e) => setError(String(e)))
 	}, [])
@@ -153,6 +160,17 @@ export default function App() {
 						cursor: "pointer",
 					}}
 				>Transactions</button>
+
+				<button
+					onClick={() => setTab("portfolio")}
+					style={{
+						padding: "0.5rem 1rem",
+						border: "1px solid #ccc",
+						background: tab === "transactions" ? "#111" : "#fff",
+						color: tab === "transactions" ? "#fff" : "#111",
+						cursor: "pointer",
+					}}
+				>Portfolio</button>
 			</nav>
 
 			{error && <p style={{ color: "crimson" }}>Error: {error}</p>}
@@ -255,6 +273,8 @@ export default function App() {
 				</table>
 			</>
 			)}
+
+			{tab === "portfolio" && <PortfolioTab data={portfolio} />}
 		</main>
 	)
 }
