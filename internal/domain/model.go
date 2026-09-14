@@ -232,3 +232,23 @@ func (g Goal) Validate() error {
 
 	return nil
 }
+
+// Price is a market quote for an asset on a date.
+type Price struct {
+	Asset string `json:"asset"`
+	Date  Date   `json:"date"`
+	Price Amount `json:"price"`
+}
+
+// Validate checks the price invariants.
+func (p Price) Validate() error {
+	if p.Asset == "" {
+		return fmt.Errorf("price: empty asset")
+	}
+
+	if p.Date.IsZero() {
+		return fmt.Errorf("price %q: empty date", p.Asset)
+	}
+
+	return nil
+}

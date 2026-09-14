@@ -161,29 +161,42 @@ func writeJSON(w http.ResponseWriter, v any) error {
 
 // Position is a holding valved at last buy price (cost basis)
 type Position struct {
-	Asset    string         `json:"asset"`
-	Account  string         `json:"account"`
-	Quantity domain.Amount  `json:"quantity"`
-	Price    domain.Amount  `json:"price"`
-	CostValue domain.Amount `json:"cost_value"`
+	Asset       string         `json:"asset"`
+	Account     string         `json:"account"`
+	Quantity    domain.Amount  `json:"quantity"`
+	Price       domain.Amount  `json:"price"`
+	CostValue   domain.Amount  `json:"cost_value"`
+	MarketValue *domain.Amount `json:"market_value,omitempty"`
 }
 
 // Portfolio is the set of open positions plus their total cost.
 // Single-currency assumption: positions in other currencies are listed
 // but excluded from TotalCost (multi-currency comes with prices).
 type Portfolio struct {
-	Positions []Position `json:"positions"`
-	TotalCost domain.Amount `json:"total_cost"`
+	Positions   []Position     `json:"positions"`
+	TotalCost   domain.Amount  `json:"total_cost"`
+	TotalMarket *domain.Amount `json:"total_market,omitempty"`
+	Basis       string         `json:"basis"`
 }
 
-func (s *Server) handlePortfolio(w http.ResponseWriter, _ *http.Request) {
+func (s *Server) handlePortfolio(w http.ResponseWriter, r *http.Request) {
+	basis := r.URL.Query().Get("basis")
+	if basis == "" {
+		basis = "cost"
+	}
+
+	if basis != "cost" && basis != "market" {
+		http.Error(w, "basis must be cost or market", http.StatusBadRequest)
+		return
+	}
+
 	l, err := store.LoadDir(s.dataDir)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	pf, err := buildPortfolio(l.Transactions)
+	pf, err := buildPortfolio(l.Transactions, l.Prices, basis)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -195,9 +208,14 @@ func (s *Server) handlePortfolio(w http.ResponseWriter, _ *http.Request) {
 }
 
 // buildPortfolio nets buy/sell quantities per account+asset and values
-// each open position at its last buy price.
-func buildPortfolio(txs []domain.Transaction) (Portfolio, error) {
-	type key struct{ account, asset string }
+// each open position at ost (last buy) and, when basis is "market",
+// at the latest known quote (falling back to cost without quote).
+func buildPortfolio(txs []domain.Transaction,
+                    prices []domain.Price,
+	            basis string,
+) (Portfolio, error) {
+	type key struct{ account, asset string
+}
 	qty := map[key]*big.Rat{}
 	lastPrice := map[key]domain.Amount{}
 
@@ -227,9 +245,12 @@ func buildPortfolio(txs []domain.Transaction) (Portfolio, error) {
 		}
 	}
 
+	quotes := latestPrices(prices)
+
 	var out []Position
-	var total domain.Amount
-	first := true
+	var totalCost, totalMarket domain.Amount
+	totalCost, _ = domain.ParseAmount("0 EUR")
+	totalMarket, _ = domain.ParseAmount("0 EUR")
 	for k, q := range qty {
 		if q.Sign() <= 0 {
 			continue
@@ -237,29 +258,53 @@ func buildPortfolio(txs []domain.Transaction) (Portfolio, error) {
 
 		px := lastPrice[k]
 		cost := domain.NewAmount(new(big.Rat).Mul(q, px.Rat()), px.Commodity())
-		out = append(out, Position{
+		pos := Position{
 			Asset: k.asset, Account: k.account,
 			Quantity: domain.NewAmount(q, domain.Commodity(k.asset)),
 			Price: px, CostValue: cost,
-		})
-		if first {
-			total, _ = domain.ParseAmount("0 " + string(px.Commodity()))
-			first = false
+		}
+		if sum, err := totalCost.Add(cost); err == nil {
+			totalCost = sum
 		}
 
-		if sum, err := total.Add(cost); err == nil {
-			total = sum
+		if basis == "market" {
+			mv := cost // fallback: no quote -> cost
+			if quote, ok := quotes[k.asset]; ok && quote.Commodity() == px.Commodity() {
+				mv = domain.NewAmount(new(big.Rat).Mul(q, quote.Rat()), quote.Commodity())
+			}
+
+			pos.MarketValue = &mv
+			if sum, err := totalMarket.Add(mv); err == nil {
+				totalMarket = sum
+			}
 		}
+
+		out = append(out, pos)
 	}
 
 	sort.Slice(out, func(i, j int) bool {
 		return out[i].CostValue.Rat().Cmp(out[j].CostValue.Rat()) > 0
 	})
 
-	// no psitions: zero ttal in EUR
-	if first {
-		total, _ = domain.ParseAmount("0 EUR")
+	pf := Portfolio{Positions: out, TotalCost: totalCost, Basis: basis}
+	if basis == "market" {
+		pf.TotalMarket = &totalMarket
 	}
 
-	return Portfolio{Positions: out, TotalCost: total}, nil
+	return pf, nil
+}
+
+// latestPrices keeps the newest quote per asset.
+func latestPrices(prices []domain.Price) map[string]domain.Amount {
+	out := map[string]domain.Amount{}
+	seen := map[string]domain.Date{}
+
+	for _, p := range prices {
+		if d, ok := seen[p.Asset]; !ok || p.Date.After(d.Time) {
+			seen[p.Asset] = p.Date
+			out[p.Asset] = p.Price
+		}
+	}
+
+	return out
 }

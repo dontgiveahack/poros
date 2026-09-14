@@ -88,3 +88,46 @@ func TestPortfolio(t *testing.T) {
 		t.Errorf("cost = %q, want 403.56 EUR", got)
 	}
 }
+
+func TestPortfolioMarket(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "transactions.json"), []byte(`[
+		{"id":"b1","date":"2026-08-10","type":"buy","asset":"VWCE","quantity":"5","price":{"value":"130","commodity":"EUR"},"account":"broker/ibkr"}
+	]`), 0o644); err != nil {
+		t.Fatalf("setup WriteFile: %v", err)
+	}
+
+	if err := os.WriteFile(filepath.Join(dir, "prices.json"), []byte(`[
+		{"asset":"VWCE","date":"2026-08-20","price":{"value":"135","commodity":"EUR"}},
+		{"asset":"VWCE","date":"2026-08-24","price":{"value":"140.10","commodity":"EUR"}}
+	]`), 0o644); err != nil {
+		t.Fatalf("setup WriteFile: %v", err)
+	}
+
+	s := New(dir)
+	req := httptest.NewRequest("GET", "/api/v1/portfolio?basis=market", nil)
+	rec := httptest.NewRecorder()
+	s.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("portfolio = %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var pf Portfolio
+	if err := json.Unmarshal(rec.Body.Bytes(), &pf); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+
+	if pf.Basis != "market" {
+		t.Errorf("basis = %q", pf.Basis)
+	}
+
+	p := pf.Positions[0]
+	if p.MarketValue == nil || p.MarketValue.String() != "700.5 EUR" { // 5 × 140.10 (latest quote)
+		t.Errorf("market = %v, want 700.5 EUR", p.MarketValue)
+	}
+
+	if got := p.CostValue.String(); got != "650 EUR" { // 5 × 130 untouched
+		t.Errorf("cost = %q, want 650 EUR", got)
+	}
+}

@@ -16,6 +16,7 @@ type Ledger struct {
 	Transactions []domain.Transaction
 	Assets       []domain.Asset
 	Goals        []domain.Goal
+	Prices       []domain.Price
 }
 
 // LoadDir reads accounts.json, transactions.json, assets.json, goals.json
@@ -51,6 +52,14 @@ func LoadDir(dir string) (*Ledger, error) {
 	if err := loadFile(filepath.Join(dir, "goals.json"),
 	                   &l.Goals,
 			   func(g domain.Goal) error { return g.Validate() },
+	); err != nil {
+		return nil, err
+	}
+
+	// Prices
+	if err := loadFile(filepath.Join(dir, "prices.json"),
+	                   &l.Prices,
+	                   func(p domain.Price) error { return p.Validate() },
 	); err != nil {
 		return nil, err
 	}
