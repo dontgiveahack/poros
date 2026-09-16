@@ -122,14 +122,39 @@ func (s *Server) handleBalances(w http.ResponseWriter, _ *http.Request) {
 }
 
 func (s *Server) handleFire(w http.ResponseWriter, r *http.Request) {
-	year := atoiQuery(r, "year", 0)
+	q := r.URL.Query()
+	opts := fire.Options{
+		Year:           atoiQuery(r, "year", 0),
+		WithdrawalRate: atofQuery(r, "withdrawal", 0),
+		ExpectedReturn: atofQuery(r, "return", 0),
+		CurrentAge:     atoiQuery(r, "age", 0),
+		RetirementAge:  atoiQuery(r, "retire_age", 0),
+	}
+
+	for _, kv := range []struct {
+		key string
+		dst **domain.Amount
+	}{
+		{"lean", &opts.LeanExpenses},
+		{"fat",  &opts.FatExpenses},
+	} {
+		if v := q.Get(kv.key); v != "" {
+			a, err := domain.ParseAmount(v)
+			if err != nil {
+				http.Error(w, kv.key+": "+err.Error(), http.StatusBadRequest)
+				return
+			}
+			*kv.dst = &a
+		}
+	}
+
 	l, err := store.LoadDir(s.dataDir)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	sum, err := fire.Calculate(l, fire.Options{Year: year})
+	sum, err := fire.Calculate(l, opts)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -138,6 +163,20 @@ func (s *Server) handleFire(w http.ResponseWriter, r *http.Request) {
 	if err := writeJSON(w, sum); err != nil {
 		slog.Error("encode fire", "err", err)
 	}
+}
+
+func atofQuery(r *http.Request, key string, def float64) float64 {
+	v := r.URL.Query().Get(key)
+	if v == "" {
+		return def
+	}
+
+	var f float64
+	if _, err := fmt.Sscanf(v, "%f", &f); err != nil {
+		return def
+	}
+
+	return f
 }
 
 func atoiQuery(r *http.Request, key string, def int) int {

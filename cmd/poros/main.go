@@ -261,9 +261,14 @@ func runVerify(args []string) int {
 func runReport(args []string) int {
 	fs := flag.NewFlagSet("report", flag.ContinueOnError)
 	dataDir := fs.String("data", "data", "data directory")
+	configPath := fs.String("config", "poros.toml", "config file")
 	year := fs.Int("year", 0, "calendar year (default current)")
 	withdrawal := fs.Float64("withdrawal", 0.04, "withdrawal rate")
 	ret := fs.Float64("return", 0.05, "expected annual return")
+	age := fs.Int("age", 0, "current age (coast FIRE)")
+	retireAge := fs.Int("retire-age", 0, "retirement age (coast FIRE)")
+	lean := fs.String("lean", "", "lean annual expenses, e.g. \"20000 EUR\"")
+	fat := fs.String("fat", "", "fat annual expenses")
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
@@ -273,13 +278,61 @@ func runReport(args []string) int {
 		return 2
 	}
 
+	cfg, err := config.Load(*configPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "config %s: %v\n", *configPath, err)
+		return 1
+	}
+
+	opts, err := cfg.FireOptions()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "config %s: %v\n", *configPath, err)
+		return 1
+	}
+
+	// CLI flags override config
+	opts.Year = *year
+	if *withdrawal != 0 {
+		opts.WithdrawalRate = *withdrawal
+	}
+
+	if *ret != 0 {
+		opts.ExpectedReturn = *ret
+	}
+
+	if *age != 0 {
+		opts.CurrentAge = *age
+	}
+
+	if *retireAge != 0 {
+		opts.RetirementAge = *retireAge
+	}
+
+	if *lean != "" {
+		a, err := domain.ParseAmount(*lean)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "lean: %v\n", err)
+			return 2
+		}
+		opts.LeanExpenses = &a
+	}
+
+	if *fat != "" {
+		a, err := domain.ParseAmount(*fat)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "fat: %v\n", err)
+			return 2
+		}
+		opts.FatExpenses = &a
+	}
+
 	ledger, err := store.LoadDir(*dataDir)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "load %s: %v\n", *dataDir, err)
 		return 1
 	}
 
-	s, err := fire.Calculate(ledger, fire.Options{Year: *year, WithdrawalRate: *withdrawal, ExpectedReturn: *ret})
+	s, err := fire.Calculate(ledger, opts)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "calculate: %v\n", err)
 		return 1
@@ -297,6 +350,19 @@ func runReport(args []string) int {
 		fmt.Printf("  Years to FIRE: never at current pace\n")
 	} else {
 		fmt.Printf("  Years to FIRE: %11.1f\n", s.YearsToFire)
+	}
+
+	if s.CoastFire != nil {
+		fmt.Printf("  Coast FIRE:     %12s", s.CoastFire.String())
+		fmt.Printf("  (%0f%% funded)\n", s.CoastProgress*100)
+	}
+
+	if s.LeanFire != nil {
+		fmt.Printf("  Lean FIRE:      %12s\n", s.LeanFire.String())
+	}
+
+	if s.FatFire != nil {
+		fmt.Printf("  Fat FIRE:       %12s\n", s.FatFire.String())
 	}
 
 	return 0

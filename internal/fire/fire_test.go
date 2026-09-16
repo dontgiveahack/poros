@@ -69,6 +69,49 @@ func TestCalculateNegativeSavings(t *testing.T) {
 	}
 }
 
+func TestCoastFire(t *testing.T) {
+	ledger := &store.Ledger{Transactions: []domain.Transaction{
+		{ID: "e1", Date: dDate("2026-06-01"), Type: domain.TxExpense, Amount: amt(t, "30000 EUR"), Account: "bank/checking"},
+	}}
+	s, err := Calculate(ledger, Options{Year: 2026, CurrentAge: 35, RetirementAge: 67})
+	if err != nil {
+		t.Fatalf("Calculate: %v", err)
+	}
+	if s.CoastFire == nil {
+		t.Fatal("coast should be set")
+	}
+	// 750000 / 1.05^32 ≈ 157k — assert roughly, not exact cents.
+	f, _ := s.CoastFire.Rat().Float64()
+	if f < 150000 || f > 165000 {
+		t.Errorf("coast = %v, want ~157k", f)
+	}
+}
+
+func TestLeanFat(t *testing.T) {
+	ledger := &store.Ledger{}
+	lean := mustAmt(t, "20000 EUR")
+	fat := mustAmt(t, "45000 EUR")
+	s, err := Calculate(ledger, Options{Year: 2026, LeanExpenses: &lean, FatExpenses: &fat})
+	if err != nil {
+		t.Fatalf("Calculate: %v", err)
+	}
+	if s.LeanFire == nil || s.LeanFire.String() != "500000 EUR" { // 20000/0.04
+		t.Errorf("lean = %v", s.LeanFire)
+	}
+	if s.FatFire == nil || s.FatFire.String() != "1125000 EUR" { // 45000/0.04
+		t.Errorf("fat = %v", s.FatFire)
+	}
+}
+
+func mustAmt(t *testing.T, s string) domain.Amount {
+	t.Helper()
+	a, err := domain.ParseAmount(s)
+	if err != nil {
+		t.Fatalf("parse %q: %v", s, err)
+	}
+	return a
+}
+
 func dDate(s string) domain.Date {
 	t, _ := time.Parse("2006-01-02", s)
 	return domain.Date{Time: t}

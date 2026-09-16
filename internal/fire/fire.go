@@ -16,18 +16,29 @@ type Options struct {
 	Year           int     // calendar year for income/expenses (Default current)
 	WithdrawalRate float64 // e.g. 0.04 (Default 0.04)
 	ExpectedReturn float64 // e.g. 0.05 (Default 0.05)
+	// Coast FIRE needs both ages; zero disables it.
+	CurrentAge     int
+	RetirementAge  int
+	// Lean/Fat variants. nil disables each.
+	LeanExpenses   *domain.Amount
+	FatExpenses    *domain.Amount
 }
 
 // Summary is the FIRE report.
 type Summary struct {
-	Year           int           `json:"year"`
-	NetWorth       domain.Amount `json:"net_worth"`
-	AnnualIncome   domain.Amount `json:"annual_income"`
-	AnnualExpenses domain.Amount `json:"annual_expenses"`
-	SavingsRate    float64       `json:"savings_rate"`  // 1 - expenses / income
-	AnnualSavings  domain.Amount `json:"annual_savings"`
-	FireNumber     domain.Amount `json:"fire_number"`   // expenses / withdrawal
-	YearsToFire    float64       `json:"years_to_fire"` // -1 = never at current pace
+	Year           int            `json:"year"`
+	NetWorth       domain.Amount  `json:"net_worth"`
+	AnnualIncome   domain.Amount  `json:"annual_income"`
+	AnnualExpenses domain.Amount  `json:"annual_expenses"`
+	SavingsRate    float64        `json:"savings_rate"`  // 1 - expenses / income
+	AnnualSavings  domain.Amount  `json:"annual_savings"`
+	FireNumber     domain.Amount  `json:"fire_number"`   // expenses / withdrawal
+	YearsToFire    float64        `json:"years_to_fire"` // -1 = never at current pace
+	// Coast/Lean/Fat are omitempty: only present when configured
+	CoastFire      *domain.Amount `json:"coast_fire,omitempty"`
+	CoastProgress  float64        `json:"coast_progress,omitempty"` // networth / coast
+	LeanFire       *domain.Amount `json:"lean_fire,omitempty"`
+	FatFire        *domain.Amount `json:"fat_fire,omitempty"`
 }
 
 func (o *Options) withDefaults() {
@@ -93,12 +104,45 @@ func Calculate(l *store.Ledger, opts Options) (*Summary, error) {
 	// Years to FIRE: solve nw*(1+r)^n + save*((1+r)^n -1)/r = target
 	years := yearsToFire(nw.Rat(), savings.Rat(), fireRat, opts.ExpectedReturn)
 
-	return &Summary{
+	s := &Summary{
 		Year: opts.Year, NetWorth: nw,
 		AnnualIncome: income, AnnualExpenses: expenses,
 		SavingsRate: rate, AnnualSavings: savings,
 		FireNumber: fireNum, YearsToFire: years,
-	}, nil
+	}
+
+	// Coast FIRE: capital needed today to reach the FIRE number at
+	// retirement age with no further contributions.
+	if opts.CurrentAge > 0 && opts.RetirementAge > opts.CurrentAge {
+		yearsLeft := float64(opts.RetirementAge - opts.CurrentAge)
+		divisor := ratFromFloat(math.Pow(1+opts.ExpectedReturn, yearsLeft))
+		coast := domain.NewAmount(new(big.Rat).Quo(fireRat, divisor), cur)
+		s.CoastFire = &coast
+		if cf, _ := coast.Rat().Float64(); cf > 0 {
+			if nwf, _ := nw.Rat().Float64(); true {
+				s.CoastProgress = nwf / cf
+			}
+		}
+	}
+
+	// Lean/Fat: same rule applied to lean/fat expense levels.
+	if opts.LeanExpenses != nil {
+		lean := domain.NewAmount(new(big.Rat).Quo(
+			opts.LeanExpenses.Rat(),
+			ratFromFloat(opts.WithdrawalRate),
+		), cur)
+		s.LeanFire = &lean
+	}
+
+	if opts.FatExpenses != nil {
+		fat := domain.NewAmount(new(big.Rat).Quo(
+			opts.FatExpenses.Rat(),
+			ratFromFloat(opts.WithdrawalRate),
+		), cur)
+		s.FatFire = &fat
+	}
+
+	return s, nil
 }
 
 func mustZero(c domain.Commodity) domain.Amount {
