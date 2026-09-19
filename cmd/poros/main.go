@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"sort"
+	"strings"
 
 	"github.com/dontgiveahack/poros/internal/api"
 	"github.com/dontgiveahack/poros/internal/config"
@@ -263,18 +264,35 @@ func runReport(args []string) int {
 	dataDir := fs.String("data", "data", "data directory")
 	configPath := fs.String("config", "poros.toml", "config file")
 	year := fs.Int("year", 0, "calendar year (default current)")
-	withdrawal := fs.Float64("withdrawal", 0.04, "withdrawal rate")
-	ret := fs.Float64("return", 0.05, "expected annual return")
+	withdrawal := fs.Float64("withdrawal", 0, "withdrawal rate (default config or 0.04)")
+	ret := fs.Float64("return", 0, "expected annual return (default config or 0.05)")
 	age := fs.Int("age", 0, "current age (coast FIRE)")
 	retireAge := fs.Int("retire-age", 0, "retirement age (coast FIRE)")
 	lean := fs.String("lean", "", "lean annual expenses, e.g. \"20000 EUR\"")
 	fat := fs.String("fat", "", "fat annual expenses")
+	simulate := fs.Bool("simulate", false, "run Monte Carlo projection")
+	runs := fs.Int("runs", 10000, "simulation runs")
+	volatility := fs.Float64("volatility", 0.15, "annual volatility (std-dev)")
+	seed := fs.Int64("seed", 42, "random seed (reproducible)")
+	years := fs.Int("years", 0, "projection horizon (default: to retirement, else 10)")
+
+	// Allow `report fire --flags`: flag stops parsing at the first
+	// positional, so drop the leading subcommand before parsing.
+	if len(args) > 0 && !strings.HasPrefix(args[0], "-") {
+		if args[0] != "fire" {
+			fmt.Fprintln(os.Stderr, "usage: poros report fire [--flags]")
+			return 2
+		}
+
+		args = args[1:]
+	}
+
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
 
-	if fs.NArg() < 1 || fs.Arg(0) != "fire" {
-		fmt.Fprintln(os.Stderr, "usage: poros report fire [--year N]")
+	if fs.NArg() > 0 {
+		fmt.Fprintln(os.Stderr, "usage: pors report fire [--flags]")
 		return 2
 	}
 
@@ -326,6 +344,12 @@ func runReport(args []string) int {
 		opts.FatExpenses = &a
 	}
 
+	opts.Simulate = *simulate
+	opts.Runs = *runs
+	opts.Volatility = *volatility
+	opts.Seed = *seed
+	opts.HorizonYears = *years
+
 	ledger, err := store.LoadDir(*dataDir)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "load %s: %v\n", *dataDir, err)
@@ -363,6 +387,14 @@ func runReport(args []string) int {
 
 	if s.FatFire != nil {
 		fmt.Printf("  Fat FIRE:       %12s\n", s.FatFire.String())
+	}
+
+	if s.Sim != nil {
+		fmt.Printf("  Monte Carlo (%d runs, %d years, seed %d):\n",
+		           s.Sim.Runs, s.Sim.Years, s.Sim.Seed)
+		fmt.Printf("    P10: %12s  P50: %12s  P90: %12s\n",
+		           s.Sim.P10.String(), s.Sim.P50.String(), s.Sim.P90.String())
+		fmt.Printf("    P(FIRE): %10.1f%%\n", s.Sim.ProbFire*100)
 	}
 
 	return 0

@@ -116,3 +116,24 @@ func dDate(s string) domain.Date {
 	t, _ := time.Parse("2006-01-02", s)
 	return domain.Date{Time: t}
 }
+
+func TestSimulateZeroVolatility(t *testing.T) {
+	got := simulate(0, 10000, 0, 0.05, 0, 10, 50, 7, "EUR")
+	f, _ := got.P50.Rat().Float64()
+	if f < 125700 || f > 125900 {
+		t.Errorf("P50 = %v, want ~125779", f)
+	}
+	if got.P10.Rat().Cmp(got.P90.Rat()) != 0 {
+		t.Error("zero volatility must give identical percentiles")
+	}
+}
+
+func TestSimulateOrdering(t *testing.T) {
+	got := simulate(10000, 5000, 0, 0.05, 0.15, 20, 1000, 42, "EUR")
+	if got.P10.Rat().Cmp(got.P50.Rat()) > 0 || got.P50.Rat().Cmp(got.P90.Rat()) > 0 {
+		t.Error("percentiles out of order")
+	}
+	if got.ProbFire < 0 || got.ProbFire > 1 {
+		t.Errorf("prob = %v", got.ProbFire)
+	}
+}

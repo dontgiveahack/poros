@@ -148,6 +148,20 @@ func (s *Server) handleFire(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	if q.Get("simulate") == "1" || q.Get("simulate") == "true" {
+		opts.Simulate = true
+	}
+
+	opts.Runs = atoiQuery(r, "runs", 10000)
+	if v := q.Get("volatility"); v != "" {
+		opts.Volatility = atofQuery(r, "volatility", 0.15)
+	} else {
+		opts.Volatility = 0.15
+	}
+
+	opts.Seed = int64(atoiQuery(r, "seed", 42))
+	opts.HorizonYears = atoiQuery(r, "years", 0)
+
 	l, err := store.LoadDir(s.dataDir)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
