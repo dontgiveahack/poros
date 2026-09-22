@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react"
+import { AccountTree } from "./AccountTree"
 import { PortfolioTab, type Basis, type Portfolio } from "./Portfolio"
 
 type Amount = { value: string; commodity: string }
@@ -172,8 +173,8 @@ export default function App() {
           style={{
             padding: "0.5rem 1rem",
             border: "1px solid #ccc",
-            background: tab === "transactions" ? "#111" : "#fff",
-            color: tab === "transactions" ? "#fff" : "#111",
+            background: tab === "portfolio" ? "#111" : "#fff",
+            color: tab === "portfolio" ? "#fff" : "#111",
             cursor: "pointer",
           }}
         >Portfolio</button>
@@ -183,29 +184,13 @@ export default function App() {
       {!rows && !txs && !error && <p>Loading...</p>}
 
       {tab === "balances" && rows && (
-        <table style={{ width: "100%", borderCollapse: "collapse" }}>
-          <thead>
-              <tr style={{ textAlign: "left", borderBottom: "2px solid #ccc" }}>
-                <th>Account</th>
-                <th>Commodity</th>
-                <th style={{ textAlign: "right" }}>Amount</th>
-              </tr>
-          </thead>
-          <tbody>
-            {rows
-              .slice()
-              .sort((a, b) => a.account.localeCompare(b.account) || a.commodity.localeCompare(b.commodity))
-              .map((r) => (
-                <tr key={`${r.account}:${r.commodity}`} style={{ borderBottom: "1px solid #eee" }}>
-                <td>{r.account}</td>
-                <td>{r.commodity}</td>
-                <td style={{ textAlign: "right" }}>
-                  {r.amount.value} {r.amount.commodity}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <AccountTree
+          rows={rows}
+          onSelect={(a) => {
+            setFAccount(a)
+            setTab("transactions")
+          }}
+        />
       )}
 
       {tab === "transactions" && txs && (
