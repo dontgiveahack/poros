@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react"
 import { AccountTree } from "./AccountTree"
+import { FireTab, type FireSummary } from "./FireTab"
 import { PortfolioTab, type Basis, type Portfolio } from "./Portfolio"
 
 type Amount = { value: string; commodity: string }
@@ -48,11 +49,12 @@ function matchesSearch(r: Tx, q: string): boolean {
 }
 
 export default function App() {
-  const [tab, setTab] = useState<"balances" | "transactions" | "portfolio">("balances")
+  const [tab, setTab] = useState<"balances" | "transactions" | "portfolio" | "fire">("balances")
   const [rows, setRows] = useState<BalanceRow[] | null>(null)
   const [txs, setTxs] = useState<Tx[] | null>(null)
   const [basis, setBasis] = useState<Basis>("cost")
   const [portfolio, setPortfolio] = useState<Portfolio | null>(null)
+  const [fire, setFire] = useState<FireSummary | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   // Filters
@@ -71,10 +73,15 @@ export default function App() {
         if (!r.ok) throw new Error(`transactions ${r.status}`)
         return r.json()
       }),
+      fetch(`${API}/api/v1/fire?simulate=1&runs=5000`).then((r) => {
+        if (!r.ok) throw new Error(`fire ${r.status}`)
+        return r.json()
+      })
     ])
-      .then(([b, t]) => {
+      .then(([b, t, f]) => {
         setRows(b)
         setTxs(t)
+        setFire(f)
       })
       .catch((e) => setError(String(e)))
   }, [])
@@ -178,6 +185,17 @@ export default function App() {
             cursor: "pointer",
           }}
         >Portfolio</button>
+
+        <button
+          onClick={() => setTab("fire")}
+          style={{
+            padding: "0.5rem 1rem",
+            border: "1px solid #ccc",
+            background: tab === "fire" ? "#111" : "#fff",
+            color: tab === "fire" ? "#fff" : "#111",
+            cursor: "pointer",
+          }}
+        >Fire</button>
       </nav>
 
       {error && <p style={{ color: "crimson" }}>Error: {error}</p>}
@@ -266,6 +284,7 @@ export default function App() {
       )}
 
       {tab === "portfolio" && <PortfolioTab data={portfolio} basis={basis} onBasis={setBasis} />}
+      {tab === "fire" && <FireTab data={fire} />}
     </main>
   )
 }
