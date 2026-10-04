@@ -1,25 +1,4 @@
-export type Amount = {
-  value: string;
-  commodity: string
-}
-
-export type Position = {
-  asset: string
-  account: string
-  quantity: Amount
-  price: Amount
-  cost_value: Amount
-  market_value: Amount
-}
-
-export type Portfolio = {
-  positions: Position[]
-  total_cost: Amount
-  total_market?: Amount
-  basis: string
-}
-
-export type Basis = "cost" | "market"
+import type { Basis, Portfolio, Position } from "./types"
 
 export function PortfolioTab({ data, basis, onBasis }: { data: Portfolio | null; basis: Basis; onBasis: (b: Basis) => void }) {
   if (!data) return <p>Loading...</p>

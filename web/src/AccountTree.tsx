@@ -1,7 +1,6 @@
 import { useMemo } from "react"
 
-export type Amount = { value: string; commodity: string }
-export type BalanceRow = { account: string; commodity: string; amount: Amount }
+import type { BalanceRow } from "./types"
 
 type Node = {
   name: string

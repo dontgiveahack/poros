@@ -1,27 +1,10 @@
 import { useEffect, useMemo, useState } from "react"
 import { AccountTree } from "./AccountTree"
-import { FireTab, type FireSummary } from "./FireTab"
-import { PortfolioTab, type Basis, type Portfolio } from "./Portfolio"
+import { FireTab } from "./FireTab"
+import { PortfolioTab } from "./Portfolio"
+import { fetchBalances, fetchFire, fetchPortfolio, fetchTransactions, API } from "./api"
 
-type Amount = { value: string; commodity: string }
-type BalanceRow = { account: string; commodity: string; amount: Amount }
-type Tx = {
-  id: string
-  date: string
-  type: string
-  title?: string
-  amount?: Amount
-  account?: string
-  from?: string
-  to?: string
-  asset?: string
-  quantity?: string
-  price?: Amount
-  category?: string
-  tags?: string[]
-}
-
-const API = import.meta.env.VITE_API_URL ?? "http://localhost:8080"
+import type { BalanceRow, Basis, FireSummary, Portfolio, Tx } from "./types"
 
 function formatTx(r: Tx): string {
   if (r.amount) return `${r.amount.value} ${r.amount.commodity}`
@@ -64,20 +47,7 @@ export default function App() {
   const [fSearch, setFSearch] = useState("")
 
   useEffect(() => {
-    Promise.all([
-      fetch(`${API}/api/v1/balances`).then((r) => {
-        if (!r.ok) throw new Error(`balances ${r.status}`)
-        return r.json()
-      }),
-      fetch(`${API}/api/v1/transactions`).then((r) => {
-        if (!r.ok) throw new Error(`transactions ${r.status}`)
-        return r.json()
-      }),
-      fetch(`${API}/api/v1/fire?simulate=1&runs=5000`).then((r) => {
-        if (!r.ok) throw new Error(`fire ${r.status}`)
-        return r.json()
-      })
-    ])
+    Promise.all([fetchBalances(), fetchTransactions(), fetchFire()])
       .then(([b, t, f]) => {
         setRows(b)
         setTxs(t)
@@ -87,11 +57,7 @@ export default function App() {
   }, [])
 
   useEffect(() => {
-    fetch(`${API}/api/v1/portfolio?basis=${basis}`)
-      .then((r) => {
-        if (!r.ok) throw new Error(`portfolio ${r.status}`)
-        return r.json()
-      })
+    fetchPortfolio(basis)
       .then(setPortfolio)
       .catch((e) => setError(String(e)))
   }, [basis])

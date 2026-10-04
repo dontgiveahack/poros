@@ -1,32 +1,9 @@
-export type Amount = { value: string; commodity: string }
-
-export type FireSummary = {
-  year: number
-  net_worth: Amount
-  annual_income: Amount
-  annual_expenses: Amount
-  savings_rate: number
-  annual_savings: Amount
-  fire_number: Amount
-  years_to_fire: number
-  coast_fire?: Amount
-  coast_progress?: number
-  lean_fire?: Amount
-  fat_fire?: Amount
-  simulation?: {
-    runs: number
-    years: number
-    p10: Amount
-    p50: Amount
-    p90: Amount
-    prb_fire: number
-  }
-}
+import type { FireSummary } from "./types"
 
 function Card({ label, value, sub }: {
   label: string;
   value: string;
-  sub?: string;
+  sub?:  string;
 }) {
   return (
     <div style={{ border: "1px solid #ddd", borderRadius: 8, padding: "0.8rem 1rem", minWidth: 150, flex: "1 1 150px" }}>
@@ -41,7 +18,7 @@ function Bar({ pct }: { pct: number}) {
   const w = Math.max(0, Math.min(100, pct))
   return (
     <span style={{ display: "inline-block", width: 120, height: 8, background: "#eee", borderRadius: 4, verticalAlign: "middle" }}>
-      <span style={{ display: "inline-block", width: `${w}%`, height: 8, borderRadius: 4, backgrund: "#111" }} />
+      <span style={{ display: "inline-block", width: `${w}%`, height: 8, borderRadius: 4, background: "#111" }} />
     </span>
   )
 }
@@ -70,7 +47,7 @@ export function FireTab({ data }: { data: FireSummary | null }) {
         <Card
           label="Years to FIRE"
           value={data.years_to_fire < 0 ? "-" : data.years_to_fire.toFixed(1)}
-          sub={data.years_t_fire < 0 ? "never at current pace" : undefined}
+          sub={data.years_to_fire < 0 ? "never at current pace" : undefined}
         />
       </div>
 
