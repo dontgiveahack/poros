@@ -252,3 +252,13 @@ func (p Price) Validate() error {
 
 	return nil
 }
+
+// ParseDate parses a "YYYY-MM-DD" calendar date.
+func ParseDate(s string) (Date, error) {
+	t, err := time.Parse("2006-01-02", s)
+	if err != nil {
+		return Date{}, fmt.Errorf("invalid date %q: want YYYY-MM-DD", s)
+	}
+
+	return Date{Time: t}, nil
+}

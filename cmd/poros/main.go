@@ -9,6 +9,7 @@ import (
 	"os"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/dontgiveahack/poros/internal/api"
 	"github.com/dontgiveahack/poros/internal/config"
@@ -25,13 +26,14 @@ Usage:
   poros <command> [args]
 
 Commands:
-  version    Print the poros version
-  init       Initialise a new poros project
-  balance    Show balances per account
-  serve      Start the HTTP API server
-  verify     Compare data/*.json with the DB mirror
-  report     FIRE and savings report
-  help       Show this help
+  version     Print the poros version
+  init        Initialise a new poros project
+  balance     Show balances per account
+  serve       Start the HTTP API server
+  verify      Compare data/*.json with the DB mirror
+  report      FIRE and savings report
+  transaction Add a transaction quickly
+  help        Show this help
 
 Run 'poros balance -h' for balance options.
 `
@@ -56,6 +58,8 @@ func main() {
 		code = runVerify(os.Args[2:])
 	case "report":
 		code = runReport(os.Args[2:])
+	case "transaction":
+		code = runTransaction(os.Args[2:])
 	case "help", "-h", "--help":
 		fmt.Print(usage)
 	default:
@@ -397,5 +401,102 @@ func runReport(args []string) int {
 		fmt.Printf("    P(FIRE): %10.1f%%\n", s.Sim.ProbFire*100)
 	}
 
+	return 0
+}
+
+func runTransaction(args []string) int {
+	fs := flag.NewFlagSet("transaction", flag.ContinueOnError)
+	dataDir := fs.String("data", "data", "data directory")
+	dateStr := fs.String("date", time.Now().Format("2006-01-02"), "date YYYY-MM-DD (default today)")
+	title := fs.String("title", "", "title, e.g. \"Mercadona\"")
+	amountStr := fs.String("amount", "", "amount, e.g. \"54.32 EUR\" (required)")
+	account := fs.String("account", "", "account for income/expense/fee, e.g. bank/checking")
+	category := fs.String("category", "", "category, e.g. food")
+	from := fs.String("from", "", "source account (transfer only)")
+	to := fs.String("to", "", "destination account (transfer only)")
+
+	// `transaction expense --flags`: flag stops parsing at the first
+	// positional, so peel off the type before parsing
+	var typeArg string
+	if len(args) > 0 && !strings.HasPrefix(args[0], "-") {
+		typeArg = args[0]
+		args = args[1:]
+	}
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+
+	if typeArg == "" || fs.NArg() != 0 {
+		fmt.Fprintln(os.Stderr, "usage: poros transaction <expense|income|transfer|fee> --amount \"54.32 EUR\" ...")
+		return 2
+	}
+
+	var typ domain.TxType
+	switch typeArg {
+	case "expense":
+		typ = domain.TxExpense
+	case "income":
+		typ = domain.TxIncome
+	case "transfer":
+		typ = domain.TxTransfer
+	case "fee":
+		typ = domain.TxFee
+	default:
+		fmt.Fprintf(os.Stderr, "unknown transaction type %q (want expense|income|transfer|fee)\n", typeArg)
+		return 2
+	}
+
+	if *amountStr == "" {
+		fmt.Fprintln(os.Stderr, "transaction: --amount is required")
+		return 2
+	}
+
+	amt, err := domain.ParseAmount(*amountStr)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "transaction: %v\n", err)
+		return 2;
+	}
+
+	if typ == domain.TxTransfer {
+		if *from == "" || *to == "" {
+			fmt.Fprintln(os.Stderr, "transaction: transfer needs --from and --to")
+			return 2
+		}
+	} else if *account == "" {
+		fmt.Fprintln(os.Stderr, "transaction: --account is required")
+		return 2
+	}
+
+	date, err := domain.ParseDate(*dateStr)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "transaction: %v\n", err)
+		return 2
+	}
+
+	l, err := store.LoadDir(*dataDir)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "load %s: %v\n", *dataDir, err)
+		return 1
+	}
+
+	tx := domain.Transaction{
+		ID:       store.NextID(l.Transactions, date.Format("2006-01-02")),
+		Date:     date,
+		Type:     typ,
+		Title:    *title,
+		Amount:   &amt,
+		Account:  *account,
+		Category: *category,
+		From:     *from,
+		To:       *to,
+	}
+
+	id, err := store.AppendTransaction(*dataDir, tx)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "transaction: %v\n", err)
+		return 1
+	}
+
+	fmt.Printf("added %s (%s %s)\n", id, amt.String(), tx.Date.Format("2006-01-02"))
 	return 0
 }
